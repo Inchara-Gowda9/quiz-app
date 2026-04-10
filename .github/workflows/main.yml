@@ -2,15 +2,15 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: ["main"]
+    branches: ["master", "main"]
   pull_request:
-    branches: ["main"]
+    branches: ["master", "main"]
   workflow_dispatch:
 
 jobs:
-  # Linting job - runs only on push to main
+  # Linting job - runs only on push to main or master
   lint:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -32,10 +32,10 @@ jobs:
       - run: npm install
       - run: npm test -- --watchAll=false
 
-  # Build job - depends on test, runs on push to main or workflow_dispatch
+  # Build job - depends on test, runs on push to main/master or workflow_dispatch
   build:
     needs: test
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')) || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -45,10 +45,10 @@ jobs:
       - run: npm install
       - run: npm run build
 
-  # Docker build - depends on build, runs only on push to main
+  # Docker build - depends on build, runs only on push to main or master
   docker:
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
