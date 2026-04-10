@@ -22,7 +22,7 @@ function Quiz({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [currentQuestion]);
+  }, [currentQuestion, handleAnswer]);
 
   return (
     <div className="quiz-container">
