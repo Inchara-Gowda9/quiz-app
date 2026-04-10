@@ -54,3 +54,28 @@ jobs:
       - uses: actions/checkout@v3
       - name: Build Docker Image
         run: docker build -t quiz-app .
+
+  # Deploy job - depends on build, deploys to Netlify on push to main or master
+  deploy:
+    needs: build
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+      - run: npm install --legacy-peer-deps
+      - run: npm run build
+      - name: Deploy to Netlify
+        uses: nwtgck/actions-netlify@v2.2.3
+        with:
+          publish-dir: './build'
+          production-branch: master
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          deploy-message: "Deploy from GitHub Actions - ${{ github.ref }}"
+          enable-pull-request-comment: true
+          enable-commit-comment: true
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
