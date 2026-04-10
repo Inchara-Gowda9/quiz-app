@@ -8,9 +8,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Linting job - runs only on push to main or master
+  # Linting job
   lint:
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -20,9 +19,8 @@ jobs:
       - run: npm install --legacy-peer-deps
       - run: npx eslint src/
 
-  # Test job - runs on pull requests and push to main
+  # Test job
   test:
-    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -32,10 +30,9 @@ jobs:
       - run: npm install --legacy-peer-deps
       - run: npm test -- --watchAll=false
 
-  # Build job - depends on test, runs on push to main/master or workflow_dispatch
+  # Build job - depends on test
   build:
     needs: test
-    if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')) || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -45,20 +42,18 @@ jobs:
       - run: npm install --legacy-peer-deps
       - run: npm run build
 
-  # Docker build - depends on build, runs only on push to main or master
+  # Docker build - depends on build
   docker:
     needs: build
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - name: Build Docker Image
         run: docker build -t quiz-app .
 
-  # Deploy job - depends on build, deploys to Netlify on push to main or master
+  # Deploy job - depends on build
   deploy:
     needs: build
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
