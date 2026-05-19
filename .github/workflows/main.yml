@@ -249,3 +249,100 @@ jobs:
             --prod \
             --dir=build \
             --site=$NETLIFY_SITE_ID
+
+  # =========================
+  # EMAIL NOTIFICATION - SUCCESS
+  # =========================
+  notify-success:
+    name: Send Success Email
+    runs-on: ubuntu-latest
+    needs: [yamllint, lint, test, security, build, docker, deploy]
+    if: success()
+
+    steps:
+      - name: Send Success Email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.EMAIL_SERVER }}
+          server_port: ${{ secrets.EMAIL_PORT }}
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: |
+            ✅ CI/CD Pipeline SUCCESS - Quiz App
+          to: ${{ secrets.EMAIL_RECIPIENT }}
+          from: ${{ secrets.EMAIL_FROM }}
+          body: |
+            🎉 CI/CD Pipeline Completed Successfully!
+
+            **Build Details:**
+            - Repository: ${{ github.repository }}
+            - Branch: ${{ github.ref_name }}
+            - Commit: ${{ github.sha }}
+            - Author: ${{ github.actor }}
+            - Triggered By: ${{ github.event_name }}
+
+            **Pipeline Status:**
+            ✅ YAML Lint Check - PASSED
+            ✅ Lint & Code Quality Check - PASSED
+            ✅ Run Tests & Coverage Check - PASSED
+            ✅ Security & Dependency Audit - PASSED
+            ✅ Build & Verify React App - PASSED
+            ✅ Docker Build - PASSED
+            ✅ Deploy to Netlify - PASSED
+
+            **Job Links:**
+            - View Pipeline: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            All checks passed successfully! Your application has been built and deployed. 🚀
+
+  # =========================
+  # EMAIL NOTIFICATION - FAILURE
+  # =========================
+  notify-failure:
+    name: Send Failure Email
+    runs-on: ubuntu-latest
+    needs: [yamllint, lint, test, security, build, docker, deploy]
+    if: failure()
+
+    steps:
+      - name: Send Failure Email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.EMAIL_SERVER }}
+          server_port: ${{ secrets.EMAIL_PORT }}
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: |
+            ❌ CI/CD Pipeline FAILED - Quiz App
+          to: ${{ secrets.EMAIL_RECIPIENT }}
+          from: ${{ secrets.EMAIL_FROM }}
+          body: |
+            ⚠️ CI/CD Pipeline Failed!
+
+            **Build Details:**
+            - Repository: ${{ github.repository }}
+            - Branch: ${{ github.ref_name }}
+            - Commit: ${{ github.sha }}
+            - Author: ${{ github.actor }}
+            - Triggered By: ${{ github.event_name }}
+
+            **Action Required:**
+            One or more pipeline checks have failed. Please review the logs and fix the issues.
+
+            **How to Debug:**
+            1. Visit the pipeline logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            2. Check the failed job for error details
+            3. Fix the issues in your code
+            4. Push the changes to trigger a new pipeline run
+
+            **Common Issues:**
+            - YAML Lint Check: Verify YAML syntax in workflow files
+            - Lint & Code Quality: Fix ESLint warnings or formatting issues
+            - Tests: Ensure all tests pass with coverage checks
+            - Security Audit: Review vulnerable dependencies
+            - Build: Check for build errors in the logs
+            - Docker Build: Verify Dockerfile syntax
+            - Deploy: Check Netlify credentials and site configuration
+
+            Please take action to resolve these issues. 🔧
+
