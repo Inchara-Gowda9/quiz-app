@@ -25,10 +25,10 @@ jobs:
         run: pip install yamllint
 
       - name: Run yamllint on workflow files
-        run: yamllint .github/workflows/ -d "{extends: default, rules: {line-length: {max: 120}}}"
+        run: yamllint .github/workflows/
 
       - name: Run yamllint on config files
-        run: yamllint . -d "{extends: default, rules: {line-length: {max: 120}}}" --ignore-path .gitignore || true
+        run: yamllint . --ignore-path .gitignore || true
 
   # =========================
   # CODE QUALITY JOB
