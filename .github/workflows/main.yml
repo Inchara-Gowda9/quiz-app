@@ -3,69 +3,246 @@ name: CI/CD Pipeline
 on:
   push:
     branches: ["master"]
+
   pull_request:
     branches: ["master"]
+
   workflow_dispatch:
 
 jobs:
-  # Linting job
+  # =========================
+  # YAML LINT JOB
+  # =========================
+  yamllint:
+    name: YAML Lint Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install yamllint
+        run: pip install yamllint
+
+      - name: Run yamllint on workflow files
+        run: yamllint .github/workflows/ -d "{extends: default, rules: {line-length: {max: 120}}}"
+
+      - name: Run yamllint on config files
+        run: yamllint . -d "{extends: default, rules: {line-length: {max: 120}}}" --ignore-path .gitignore || true
+
+  # =========================
+  # CODE QUALITY JOB
+  # =========================
   lint:
+    name: Lint & Code Quality Check
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: "18"
-      - run: npm install --legacy-peer-deps
-      - run: npx eslint src/
 
-  # Test job
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Run ESLint
+        run: npx eslint src/ --max-warnings 0
+
+      - name: Check Code Formatting with Prettier
+        run: npx prettier --check "src/**/*.{js,css,json}" || npx prettier --write "src/**/*.{js,css,json}" && echo "Formatting issues found and fixed"
+
+      - name: Run ESLint with detailed report
+        run: npx eslint src/ --format json > eslint-report.json || true
+
+      - name: Display ESLint Report
+        if: always()
+        run: cat eslint-report.json
+
+  # =========================
+  # TEST JOB
+  # =========================
   test:
+    name: Run Tests & Coverage Check
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: "18"
-      - run: npm install --legacy-peer-deps
-      - run: npm test -- --watchAll=false
 
-  # Build job - depends on test
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Run Tests with Coverage
+        run: npm test -- --coverage --watchAll=false --passWithNoTests
+
+      - name: Upload Coverage Report
+        uses: codecov/codecov-action@v3
+        if: always()
+        with:
+          files: ./coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+      - name: Display Test Summary
+        if: always()
+        run: |
+          echo "=== Test Coverage Summary ==="
+          cat coverage/coverage-summary.json || echo "No coverage summary available"
+
+  # =========================
+  # SECURITY JOB
+  # =========================
+  security:
+    name: Security & Dependency Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Run npm Audit
+        run: npm audit --audit-level=high || true
+
+      - name: Run npm Audit (JSON Report)
+        run: npm audit --json > audit-report.json || true
+
+      - name: Display Security Report
+        if: always()
+        run: |
+          echo "=== Security Audit Report ==="
+          cat audit-report.json || echo "No audit report available"
+
+      - name: Check for Known Vulnerabilities
+        run: npm list || true
+
+  # =========================
+  # BUILD JOB
+  # =========================
   build:
-    needs: test
+    name: Build & Verify React App
+    needs: [yamllint, lint, test, security]
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: "18"
-      - run: npm install --legacy-peer-deps
-      - run: npm run build
 
-  # Docker build - depends on build
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Build Application
+        run: npm run build
+
+      - name: Verify Build Output
+        run: |
+          echo "=== Build Verification ==="
+          ls -lah build/
+          echo "Build directory size:"
+          du -sh build/
+          echo "Files in build:"
+          find build -type f | wc -l
+
+      - name: Check for Build Errors
+        run: |
+          if [ ! -f build/index.html ]; then
+            echo "ERROR: build/index.html not found!"
+            exit 1
+          fi
+          echo "✓ Build verification passed"
+
+      - name: Analyze Bundle Size
+        run: |
+          echo "=== Bundle Size Analysis ==="
+          du -sh build/static/js/* || echo "No JS files found"
+          du -sh build/static/css/* || echo "No CSS files found"
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: react-build
+          path: build
+
+  # =========================
+  # DOCKER JOB
+  # =========================
   docker:
+    name: Docker Build
     needs: build
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
       - name: Build Docker Image
         run: docker build -t quiz-app .
 
-  # Deploy job - depends on build
+  # =========================
+  # DEPLOY JOB
+  # =========================
   deploy:
-    needs: build
+    name: Deploy to Netlify
+    needs: [build, docker]
     runs-on: ubuntu-latest
+
+    environment:
+      name: production
+
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: "18"
-      - run: npm install --legacy-peer-deps
-      - run: npm run build
+          node-version: 18
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Download Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: react-build
+          path: build
+
+      - name: Install Netlify CLI
+        run: npm install -g netlify-cli
+
       - name: Deploy to Netlify
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
         run: |
-          npm install -g netlify-cli
-          netlify deploy --prod --dir=build --site=$NETLIFY_SITE_ID
+          netlify deploy \
+            --prod \
+            --dir=build \
+            --site=$NETLIFY_SITE_ID

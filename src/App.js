@@ -10,14 +10,14 @@ function App() {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [score, setScore] = useState(0);
 
-  // ▶️ Start Quiz
+  
   const startQuiz = () => {
     setScreen("quiz");
     setCurrentQuestion(0);
     setScore(0);
   };
 
-  // 🧠 Handle Answer
+ 
   const handleAnswer = (selectedOption) => {
     const currentQ = questions[currentQuestion];
 
@@ -34,12 +34,12 @@ function App() {
     }
   };
 
-  // 🏠 Go Home
+  
   const goHome = () => {
     setScreen("home");
   };
 
-  // 🔄 Restart Quiz
+  
   const restartQuiz = () => {
     startQuiz();
   };
