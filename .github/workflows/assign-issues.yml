@@ -1,0 +1,161 @@
+name: Auto-Assign Issues
+
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  assign-issue:
+    name: Auto-Assign Issues by Label
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Assign Issue Based on Labels
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const issue = context.payload.issue;
+
+            // Map labels to assignees (customize this based on your team)
+            const labelToAssignee = {
+              'bug': ['maintainer1'],
+              'feature': ['maintainer2'],
+              'documentation': ['maintainer1', 'maintainer2'],
+              'frontend': ['maintainer2'],
+              'backend': ['maintainer1'],
+              'ci-cd': ['maintainer1'],
+              'security': ['maintainer1'],
+              'performance': ['maintainer2'],
+              'refactor': ['maintainer1'],
+              'help-wanted': []  // Don't auto-assign help-wanted issues
+            };
+
+            const labels = issue.labels.map(label => label.name);
+            const assignees = new Set();
+
+            // Find assignees based on labels
+            labels.forEach(label => {
+              const labelLower = label.toLowerCase();
+              if (labelToAssignee[labelLower]) {
+                labelToAssignee[labelLower].forEach(assignee => {
+                  assignees.add(assignee);
+                });
+              }
+            });
+
+            // Add issue creator as assignee if it's a bug report
+            if (labels.some(l => l.toLowerCase() === 'bug')) {
+              assignees.add(issue.user.login);
+            }
+
+            if (assignees.size > 0) {
+              try {
+                await github.rest.issues.addAssignees({
+                  owner,
+                  repo,
+                  issue_number: issue.number,
+                  assignees: Array.from(assignees)
+                });
+
+                console.log(`✅ Assigned issue #${issue.number} to: ${Array.from(assignees).join(', ')}`);
+              } catch (error) {
+                console.log(`⚠️ Could not assign issue: ${error.message}`);
+              }
+            } else {
+              console.log(`⚠️ No assignee found for labels: ${labels.join(', ')}`);
+            }
+
+      - name: Add Priority Based on Issue Type
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const issue = context.payload.issue;
+
+            const labels = issue.labels.map(label => label.name);
+
+            let priority = '';
+
+            if (labels.includes('bug')) {
+              priority = 'priority-high';
+            } else if (labels.includes('security')) {
+              priority = 'priority-critical';
+            } else if (labels.includes('feature')) {
+              priority = 'priority-medium';
+            } else if (labels.includes('documentation')) {
+              priority = 'priority-low';
+            }
+
+            if (priority && !labels.includes(priority)) {
+              try {
+                await github.rest.issues.addLabels({
+                  owner,
+                  repo,
+                  issue_number: issue.number,
+                  labels: [priority]
+                });
+
+                console.log(`✅ Added priority label: ${priority}`);
+              } catch (error) {
+                console.log(`⚠️ Could not add priority: ${error.message}`);
+              }
+            }
+
+      - name: Post Auto-Assignment Comment
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const issue = context.payload.issue;
+
+            const labels = issue.labels.map(label => label.name);
+
+            // Only post comment on new issues
+            if (context.payload.action !== 'opened') {
+              console.log('Skipping comment - issue was not just opened');
+              return;
+            }
+
+            let comment = `## 📝 Auto-Assignment Complete\n\n`;
+            comment += `**Labels:** ${labels.length > 0 ? labels.join(', ') : 'None'}\n`;
+            comment += `**Type:** ${labels.includes('bug') ? '🐛 Bug' : labels.includes('feature') ? '✨ Feature' : '📋 Issue'}\n\n`;
+
+            comment += `### Next Steps\n`;
+            if (labels.includes('bug')) {
+              comment += `1. 🔍 Reproduce the issue\n`;
+              comment += `2. 🗂️ Check if it's a duplicate\n`;
+              comment += `3. 📋 Provide detailed steps to reproduce\n`;
+              comment += `4. 🎯 Expected vs actual behavior\n`;
+            } else if (labels.includes('feature')) {
+              comment += `1. 💭 Discuss the feature proposal\n`;
+              comment += `2. 🎨 Design and architecture\n`;
+              comment += `3. 📊 Estimation and priority\n`;
+              comment += `4. ✅ Review and approval\n`;
+            } else {
+              comment += `1. 📖 Review the issue details\n`;
+              comment += `2. 💬 Ask questions if needed\n`;
+              comment += `3. 🚀 Start working on it\n`;
+            }
+
+            comment += `\nThank you for contributing! 🙏`;
+
+            try {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: issue.number,
+                body: comment
+              });
+
+              console.log(`✅ Posted auto-assignment comment on issue #${issue.number}`);
+            } catch (error) {
+              console.log(`⚠️ Could not post comment: ${error.message}`);
+            }

@@ -1,0 +1,152 @@
+name: Auto-Assign PR
+
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  assign-pr:
+    name: Auto-Assign Pull Request
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Assign PR to Author
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const pr = context.payload.pull_request;
+
+            console.log(`Assigning PR #${pr.number} to @${pr.user.login}...`);
+
+            await github.rest.issues.addAssignees({
+              owner,
+              repo,
+              issue_number: pr.number,
+              assignees: [pr.user.login]
+            });
+
+            console.log(`✅ Successfully assigned PR #${pr.number} to @${pr.user.login}`);
+
+      - name: Request Review from Team
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const pr = context.payload.pull_request;
+
+            // Define code reviewers (add your team members here)
+            const reviewers = ['maintainer1', 'maintainer2'];
+
+            // Define code review team (optional)
+            const team_reviewers = [];
+
+            try {
+              await github.rest.pulls.requestReviewers({
+                owner,
+                repo,
+                pull_number: pr.number,
+                reviewers: reviewers.filter(r => r !== pr.user.login),
+                team_reviewers: team_reviewers
+              });
+
+              console.log(`✅ Requested reviews from: ${reviewers.join(', ')}`);
+            } catch (error) {
+              console.log(`⚠️ Could not request reviewers: ${error.message}`);
+            }
+
+      - name: Add Labels Based on Files Changed
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const pr = context.payload.pull_request;
+
+            // Get changed files
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner,
+              repo,
+              pull_number: pr.number
+            });
+
+            const labels = new Set();
+
+            // Categorize by file type
+            files.forEach(file => {
+              if (file.filename.match(/\.js$|\.jsx$/)) {
+                labels.add('javascript');
+                labels.add('frontend');
+              }
+              if (file.filename.match(/\.css$/)) {
+                labels.add('styles');
+              }
+              if (file.filename.match(/\.test\.js$/)) {
+                labels.add('tests');
+              }
+              if (file.filename.match(/\.yml|\.yaml/)) {
+                labels.add('ci-cd');
+              }
+              if (file.filename.match(/package\.json|package-lock\.json/)) {
+                labels.add('dependencies');
+              }
+              if (file.filename.match(/README|CHANGELOG|\.md$/)) {
+                labels.add('documentation');
+              }
+            });
+
+            if (labels.size > 0) {
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: pr.number,
+                labels: Array.from(labels)
+              });
+
+              console.log(`✅ Added labels: ${Array.from(labels).join(', ')}`);
+            }
+
+      - name: Post Welcome Comment
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const pr = context.payload.pull_request;
+
+            const comment = `
+## 👋 Welcome, @${pr.user.login}!
+
+Thank you for your pull request! Here's what happens next:
+
+- ✅ You've been assigned as the PR owner
+- 👀 Code reviewers have been notified
+- 🏷️ Automated labels have been added based on files changed
+
+### Pre-Merge Checklist
+- [ ] All CI checks pass (tests, linting, build)
+- [ ] Code review approved
+- [ ] No merge conflicts
+- [ ] Commit messages are clear
+
+### Need Help?
+- Check the [Contributing Guide](../../CONTRIBUTING.md) if it exists
+- Review the [README](../../README.md) for setup instructions
+
+Happy coding! 🚀
+            `;
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: pr.number,
+              body: comment
+            });
+
+            console.log(`✅ Posted welcome comment on PR #${pr.number}`);

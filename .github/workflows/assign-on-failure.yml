@@ -1,0 +1,208 @@
+name: Auto-Assign on Pipeline Failure
+
+on:
+  workflow_run:
+    workflows: ["CI/CD Pipeline"]
+    types: [completed]
+
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+
+jobs:
+  assign-on-failure:
+    name: Auto-Assign on CI Failure
+    runs-on: ubuntu-latest
+    if: failure() || github.event.workflow_run.conclusion == 'failure'
+
+    steps:
+      - name: Get Workflow Information
+        id: workflow-info
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const workflow = context.payload.workflow_run;
+
+            console.log(`Workflow: ${workflow.name}`);
+            console.log(`Conclusion: ${workflow.conclusion}`);
+            console.log(`Triggering Event: ${workflow.event}`);
+
+            // Get the head commit
+            const headCommit = workflow.head_sha;
+            const headBranch = workflow.head_branch;
+
+            console.log(`Head Commit: ${headCommit}`);
+            console.log(`Head Branch: ${headBranch}`);
+
+            // Store outputs
+            core.setOutput('head-commit', headCommit);
+            core.setOutput('head-branch', headBranch);
+            core.setOutput('conclusion', workflow.conclusion);
+
+      - name: Find Associated Pull Request
+        id: find-pr
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const headBranch = '${{ steps.workflow-info.outputs.head-branch }}';
+
+            try {
+              const { data: pullRequests } = await github.rest.pulls.list({
+                owner,
+                repo,
+                state: 'open',
+                head: `${owner}:${headBranch}`
+              });
+
+              if (pullRequests.length > 0) {
+                const pr = pullRequests[0];
+                core.setOutput('pr-number', pr.number);
+                core.setOutput('pr-author', pr.user.login);
+                console.log(`✅ Found PR: #${pr.number} by @${pr.user.login}`);
+                return;
+              }
+
+              console.log(`⚠️ No open PR found for branch: ${headBranch}`);
+            } catch (error) {
+              console.log(`⚠️ Error finding PR: ${error.message}`);
+            }
+
+      - name: Assign Failed PR to Author
+        if: steps.find-pr.outputs.pr-number
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const prNumber = parseInt('${{ steps.find-pr.outputs.pr-number }}');
+            const prAuthor = '${{ steps.find-pr.outputs.pr-author }}';
+
+            try {
+              // Add assignee
+              await github.rest.issues.addAssignees({
+                owner,
+                repo,
+                issue_number: prNumber,
+                assignees: [prAuthor]
+              });
+
+              // Add failed label
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: prNumber,
+                labels: ['ci-failed', 'requires-attention']
+              });
+
+              console.log(`✅ Assigned PR #${prNumber} to @${prAuthor} and added labels`);
+            } catch (error) {
+              console.log(`⚠️ Error assigning PR: ${error.message}`);
+            }
+
+      - name: Post Failure Comment on PR
+        if: steps.find-pr.outputs.pr-number && github.event.workflow_run.conclusion == 'failure'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const prNumber = parseInt('${{ steps.find-pr.outputs.pr-number }}');
+            const workflowUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}`;
+
+            const comment = `
+## ❌ CI Pipeline Failed
+
+Your pipeline has failed! Please review the logs and fix the issues.
+
+### 🔗 Pipeline Details
+- **Run ID:** ${{ github.event.workflow_run.id }}
+- **Conclusion:** ${{ github.event.workflow_run.conclusion }}
+- **View Logs:** [GitHub Actions](${workflowUrl})
+
+### 🛠️ Common Issues
+- **Linting:** Check ESLint errors - run \`npm run lint\` locally
+- **Tests:** Run \`npm test\` to debug failing tests
+- **Build:** Run \`npm run build\` to check build errors
+- **Security:** Review \`npm audit\` for vulnerabilities
+
+### ✅ How to Fix
+1. Pull the latest changes: \`git pull origin ${{ github.event.workflow_run.head_branch }}\`
+2. Run tests locally: \`npm install && npm test\`
+3. Fix the issues
+4. Commit and push: \`git commit -am "Fix CI issues" && git push\`
+
+### 📞 Need Help?
+- Check the workflow logs for detailed error messages
+- Review the commit diff for recent changes
+- Reach out to the team on Slack/Discord
+
+Please fix these issues so we can merge your changes! 🚀
+            `;
+
+            try {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: prNumber,
+                body: comment
+              });
+
+              console.log(`✅ Posted failure comment on PR #${prNumber}`);
+            } catch (error) {
+              console.log(`⚠️ Could not post comment: ${error.message}`);
+            }
+
+      - name: Create Issue for Failed Pipeline (if no PR)
+        if: '!steps.find-pr.outputs.pr-number && github.event.workflow_run.event == ''push'''
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const headBranch = '${{ steps.workflow-info.outputs.head-branch }}';
+            const headCommit = '${{ steps.workflow-info.outputs.head-commit }}';
+            const workflowUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}`;
+
+            const issueTitle = `🔴 CI Pipeline Failed on ${headBranch}`;
+            const issueBody = `
+## Pipeline Failure Report
+
+The CI/CD pipeline failed on branch \`${headBranch}\`
+
+### Details
+- **Branch:** ${headBranch}
+- **Commit:** ${headCommit}
+- **Workflow Run:** [View Logs](${workflowUrl})
+
+### Next Steps
+1. Review the workflow logs for error details
+2. Check recent commits on this branch
+3. Fix the failing checks
+4. Push the fixes to trigger a new run
+
+### Labels Applied
+- \`ci-failed\`
+- \`requires-attention\`
+
+Please address these issues to keep the pipeline healthy! 🚀
+            `;
+
+            try {
+              const { data: issue } = await github.rest.issues.create({
+                owner,
+                repo,
+                title: issueTitle,
+                body: issueBody,
+                labels: ['ci-failed', 'requires-attention'],
+                assignees: []
+              });
+
+              console.log(`✅ Created issue #${issue.number} for failed pipeline`);
+            } catch (error) {
+              console.log(`⚠️ Could not create issue: ${error.message}`);
+            }
