@@ -44,7 +44,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
           cache: "npm"
 
       - name: Install Dependencies
@@ -54,7 +54,9 @@ jobs:
         run: npx eslint src/ --max-warnings 0
 
       - name: Check Code Formatting with Prettier
-        run: npx prettier --check "src/**/*.{js,css,json}" || npx prettier --write "src/**/*.{js,css,json}" && echo "Formatting issues found and fixed"
+        run: |
+          npx prettier --check "src/**/*.{js,css,json}" || \
+          npx prettier --write "src/**/*.{js,css,json}"
 
       - name: Run ESLint with detailed report
         run: npx eslint src/ --format json > eslint-report.json || true
@@ -77,7 +79,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
           cache: "npm"
 
       - name: Install Dependencies
@@ -99,7 +101,8 @@ jobs:
         if: always()
         run: |
           echo "=== Test Coverage Summary ==="
-          cat coverage/coverage-summary.json || echo "No coverage summary available"
+          cat coverage/coverage-summary.json 2>/dev/null || \
+          echo "No coverage summary available"
 
   # =========================
   # SECURITY JOB
@@ -115,7 +118,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
           cache: "npm"
 
       - name: Install Dependencies
@@ -151,7 +154,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
           cache: "npm"
 
       - name: Install Dependencies
@@ -222,7 +225,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
           cache: "npm"
 
       - name: Install Dependencies
