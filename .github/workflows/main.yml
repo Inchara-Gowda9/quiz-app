@@ -291,9 +291,11 @@ jobs:
             ✅ Deploy to Netlify - PASSED
 
             **Job Links:**
-            - View Pipeline: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            - View Pipeline: https://github.com/${{ github.repository }}
+            /actions/runs/${{ github.run_id }}
 
-            All checks passed successfully! Your application has been built and deployed. 🚀
+            All checks passed successfully! Your application has 
+            been built and deployed. 🚀
 
   # =========================
   # EMAIL NOTIFICATION - FAILURE
@@ -327,10 +329,12 @@ jobs:
             - Triggered By: ${{ github.event_name }}
 
             **Action Required:**
-            One or more pipeline checks have failed. Please review the logs and fix the issues.
+            One or more pipeline checks have failed. Please review the 
+            logs and fix the issues.
 
             **How to Debug:**
-            1. Visit the pipeline logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            1. Visit the pipeline logs: https://github.com/${{ github.repository }}
+            /actions/runs/${{ github.run_id }}
             2. Check the failed job for error details
             3. Fix the issues in your code
             4. Push the changes to trigger a new pipeline run
