@@ -1,11 +1,6 @@
 import React, { useEffect, useState } from "react";
 
-function Quiz({
-  questionData,
-  handleAnswer,
-  currentQuestion,
-  total,
-}) {
+function Quiz({ questionData, handleAnswer, currentQuestion, total }) {
   const [timeLeft, setTimeLeft] = useState(10);
 
   useEffect(() => {

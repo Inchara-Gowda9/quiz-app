@@ -10,14 +10,12 @@ function App() {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [score, setScore] = useState(0);
 
-  
   const startQuiz = () => {
     setScreen("quiz");
     setCurrentQuestion(0);
     setScore(0);
   };
 
- 
   const handleAnswer = (selectedOption) => {
     const currentQ = questions[currentQuestion];
 
@@ -34,12 +32,10 @@ function App() {
     }
   };
 
-  
   const goHome = () => {
     setScreen("home");
   };
 
-  
   const restartQuiz = () => {
     startQuiz();
   };

@@ -21,8 +21,6 @@ jobs:
           script: |
             const { owner, repo } = context.repo;
             const issue = context.payload.issue;
-
-            // Map labels to assignees (customize this based on your team)
             const labelToAssignee = {
               'bug': ['maintainer1'],
               'feature': ['maintainer2'],
@@ -30,30 +28,19 @@ jobs:
               'frontend': ['maintainer2'],
               'backend': ['maintainer1'],
               'ci-cd': ['maintainer1'],
-              'security': ['maintainer1'],
-              'performance': ['maintainer2'],
-              'refactor': ['maintainer1'],
-              'help-wanted': []  // Don't auto-assign help-wanted issues
+              'security': ['maintainer1']
             };
-
-            const labels = issue.labels.map(label => label.name);
+            const labels = issue.labels.map(l => l.name);
             const assignees = new Set();
-
-            // Find assignees based on labels
             labels.forEach(label => {
-              const labelLower = label.toLowerCase();
-              if (labelToAssignee[labelLower]) {
-                labelToAssignee[labelLower].forEach(assignee => {
-                  assignees.add(assignee);
-                });
+              const lc = label.toLowerCase();
+              if (labelToAssignee[lc]) {
+                labelToAssignee[lc].forEach(a => assignees.add(a));
               }
             });
-
-            // Add issue creator as assignee if it's a bug report
             if (labels.some(l => l.toLowerCase() === 'bug')) {
               assignees.add(issue.user.login);
             }
-
             if (assignees.size > 0) {
               try {
                 await github.rest.issues.addAssignees({
@@ -62,13 +49,9 @@ jobs:
                   issue_number: issue.number,
                   assignees: Array.from(assignees)
                 });
-
-                console.log(`✅ Assigned issue #${issue.number} to: ${Array.from(assignees).join(', ')}`);
               } catch (error) {
-                console.log(`⚠️ Could not assign issue: ${error.message}`);
+                console.log(`Error: ${error.message}`);
               }
-            } else {
-              console.log(`⚠️ No assignee found for labels: ${labels.join(', ')}`);
             }
 
       - name: Add Priority Based on Issue Type
@@ -78,21 +61,17 @@ jobs:
           script: |
             const { owner, repo } = context.repo;
             const issue = context.payload.issue;
-
-            const labels = issue.labels.map(label => label.name);
-
+            const labels = issue.labels.map(l => l.name);
             let priority = '';
-
-            if (labels.includes('bug')) {
-              priority = 'priority-high';
-            } else if (labels.includes('security')) {
+            if (labels.includes('security')) {
               priority = 'priority-critical';
+            } else if (labels.includes('bug')) {
+              priority = 'priority-high';
             } else if (labels.includes('feature')) {
               priority = 'priority-medium';
             } else if (labels.includes('documentation')) {
               priority = 'priority-low';
             }
-
             if (priority && !labels.includes(priority)) {
               try {
                 await github.rest.issues.addLabels({
@@ -101,10 +80,8 @@ jobs:
                   issue_number: issue.number,
                   labels: [priority]
                 });
-
-                console.log(`✅ Added priority label: ${priority}`);
               } catch (error) {
-                console.log(`⚠️ Could not add priority: ${error.message}`);
+                console.log(`Error: ${error.message}`);
               }
             }
 
@@ -115,47 +92,20 @@ jobs:
           script: |
             const { owner, repo } = context.repo;
             const issue = context.payload.issue;
-
-            const labels = issue.labels.map(label => label.name);
-
-            // Only post comment on new issues
-            if (context.payload.action !== 'opened') {
-              console.log('Skipping comment - issue was not just opened');
-              return;
-            }
-
-            let comment = `## 📝 Auto-Assignment Complete\n\n`;
-            comment += `**Labels:** ${labels.length > 0 ? labels.join(', ') : 'None'}\n`;
-            comment += `**Type:** ${labels.includes('bug') ? '🐛 Bug' : labels.includes('feature') ? '✨ Feature' : '📋 Issue'}\n\n`;
-
-            comment += `### Next Steps\n`;
-            if (labels.includes('bug')) {
-              comment += `1. 🔍 Reproduce the issue\n`;
-              comment += `2. 🗂️ Check if it's a duplicate\n`;
-              comment += `3. 📋 Provide detailed steps to reproduce\n`;
-              comment += `4. 🎯 Expected vs actual behavior\n`;
-            } else if (labels.includes('feature')) {
-              comment += `1. 💭 Discuss the feature proposal\n`;
-              comment += `2. 🎨 Design and architecture\n`;
-              comment += `3. 📊 Estimation and priority\n`;
-              comment += `4. ✅ Review and approval\n`;
-            } else {
-              comment += `1. 📖 Review the issue details\n`;
-              comment += `2. 💬 Ask questions if needed\n`;
-              comment += `3. 🚀 Start working on it\n`;
-            }
-
-            comment += `\nThank you for contributing! 🙏`;
-
+            if (context.payload.action !== 'opened') return;
+            const labels = issue.labels.map(l => l.name);
+            let type = '📋 Issue';
+            if (labels.includes('bug')) type = '🐛 Bug';
+            else if (labels.includes('feature')) type = '✨ Feature';
+            const msg = `## Auto-Assignment Complete\n\n` +
+              `**Type:** ${type}`;
             try {
               await github.rest.issues.createComment({
                 owner,
                 repo,
                 issue_number: issue.number,
-                body: comment
+                body: msg
               });
-
-              console.log(`✅ Posted auto-assignment comment on issue #${issue.number}`);
             } catch (error) {
-              console.log(`⚠️ Could not post comment: ${error.message}`);
+              console.log(`Error: ${error.message}`);
             }

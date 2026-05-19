@@ -18,6 +18,13 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
+    "test:coverage": "react-scripts test --coverage --watchAll=false",
+    "test:ci": "react-scripts test --coverage --watchAll=false --passWithNoTests",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "format": "prettier --write \"src/**/*.{js,css,json}\"",
+    "format:check": "prettier --check \"src/**/*.{js,css,json}\"",
+    "quality-check": "npm run lint && npm run format:check && npm run test:coverage",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {

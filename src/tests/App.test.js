@@ -3,11 +3,11 @@ import App from "../App";
 
 test("renders first question after starting quiz", () => {
   render(<App />);
-  
+
   // Start quiz
   const startBtn = screen.getByText(/Start Quiz/i);
   fireEvent.click(startBtn);
-  
+
   // Check we're on question 1
   expect(screen.getByText(/1 \/ 10/i)).toBeInTheDocument();
 });
